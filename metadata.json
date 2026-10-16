@@ -1,0 +1,6 @@
+{
+  "name": "『欲』 YOKUBO GPT",
+  "description": "AI Assistant by LUST DEV. Beyond the clouds, beyond the limits. Secure multi-model AI routing with deep thinking mode and robust data protection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

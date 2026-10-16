@@ -1,0 +1,30 @@
+{
+  "short_name": "YOKUBO",
+  "name": "YOKUBO GPT — AI Security Fortress",
+  "id": "/",
+  "description": "YOKUBO GPT — Assistant d'intelligence artificielle d'élite par LUST DEV. Routage multi-modèles hautement sécurisé, raisonnement approfondi et sécurité par orchestrateur multi-IA.",
+  "icons": [
+    {
+      "src": "/favicon.jpg",
+      "type": "image/jpeg",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/og-image.jpg",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#050308",
+  "theme_color": "#050308",
+  "display": "standalone",
+  "orientation": "portrait"
+}

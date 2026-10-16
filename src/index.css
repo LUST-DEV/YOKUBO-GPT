@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+@layer base {
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    background-color: #050308;
+    color: #f1f5f9;
+    overflow-x: hidden;
+    background-image: radial-gradient(circle at 50% 120%, #110521 0%, #050308 80%);
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  .font-display {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Premium, Quiet Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050308;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Elegant, Professional glassmorphism & depths (Zero-slop / Linear-style) */
+.glass-panel {
+  background: rgba(10, 6, 18, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    0 12px 30px rgba(0, 0, 0, 0.6), 
+    inset 0 1px 1px rgba(255, 255, 255, 0.03);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 20px 40px rgba(0, 0, 0, 0.7), 
+    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.gothic-glow-crimson {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.02);
+}
+
+.gothic-glow-purple {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.02);
+}
+
+/* Beautiful custom model-aware subtle outline glow wave (Dynamic & quiet) */
+@keyframes rainbow-glow-wave {
+  0%, 100% {
+    border-color: var(--active-glow-primary, rgba(255, 255, 255, 0.08));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    border-color: var(--active-glow-secondary, rgba(255, 255, 255, 0.14));
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.gothic-rainbow-glow-wave {
+  animation: rainbow-glow-wave 10s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.gothic-rainbow-text {
+  color: #f1f5f9;
+}
+
+/* Standard Premium UI Buttons */
+.gothic-btn-primary {
+  position: relative;
+  overflow: hidden;
+  background: #f1f5f9;
+  color: #0a0515;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.gothic-btn-primary:hover {
+  transform: translateY(-1px) scale(1.01);
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.gothic-btn-primary:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.gothic-btn-secondary {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gothic-btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Soft Animations */
+@keyframes breathing-gothic {
+  0%, 100% {
+    opacity: 0.05;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scale(1.05);
+  }
+}
+
+.animate-breath-gothic-1 {
+  animation: breathing-gothic 20s ease-in-out infinite alternate;
+}
+
+.animate-breath-gothic-2 {
+  animation: breathing-gothic 25s ease-in-out infinite alternate-reverse;
+}
+
+/* Custom fade-in for context menu */
+@keyframes menu-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-menu-fade-in {
+  animation: menu-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Accessibility settings for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

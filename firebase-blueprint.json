@@ -1,0 +1,54 @@
+{
+  "collections": {
+    "users": {
+      "id": "string",
+      "email": "string",
+      "passwordHash": "string",
+      "name": "string",
+      "role": "string",
+      "isVerified": "boolean",
+      "verificationCode": "string",
+      "resetPasswordCode": "string",
+      "twoFactorSecret": "string",
+      "isTwoFactorEnabled": "boolean",
+      "createdAt": "timestamp"
+    },
+    "sessions": {
+      "id": "string",
+      "userId": "string",
+      "userAgent": "string",
+      "ipAddress": "string",
+      "createdAt": "timestamp",
+      "expiresAt": "timestamp",
+      "isValid": "boolean"
+    },
+    "conversations": {
+      "id": "string",
+      "userId": "string",
+      "title": "string",
+      "modelId": "string",
+      "isArchived": "boolean",
+      "createdAt": "timestamp",
+      "updatedAt": "timestamp"
+    },
+    "messages": {
+      "id": "string",
+      "conversationId": "string",
+      "userId": "string",
+      "role": "string",
+      "content": "string",
+      "thinkingProcess": "string",
+      "modelUsed": "string",
+      "attachments": "array",
+      "createdAt": "timestamp"
+    },
+    "security_logs": {
+      "id": "string",
+      "userId": "string",
+      "ipAddress": "string",
+      "event": "string",
+      "details": "string",
+      "createdAt": "timestamp"
+    }
+  }
+}
