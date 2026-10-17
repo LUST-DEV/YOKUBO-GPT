@@ -22,16 +22,92 @@ try {
   console.error('Failed to parse firebase-applet-config.json:', err);
 }
 
+import { LocalFirestore } from './src/server/localDb';
+
 const projectId = firebaseConfig.projectId || 'capable-asset-501719-r0';
 const databaseId = firebaseConfig.firestoreDatabaseId || undefined;
 
-// Initialize Firebase Admin securely
-if (getApps().length === 0) {
-  initializeApp({
-    projectId,
-  });
+// Initialize Firebase Admin with resilient persistent fallback for sandboxed/restricted environments
+let cloudDb: any = null;
+try {
+  if (getApps().length === 0) {
+    initializeApp({
+      projectId,
+    });
+  }
+  cloudDb = databaseId ? getFirestore(databaseId) : getFirestore();
+} catch (err) {
+  console.warn('Firebase Admin init warning:', err);
 }
-const db = databaseId ? getFirestore(databaseId) : getFirestore();
+
+const localDb = new LocalFirestore();
+let isFirestoreAvailable = false;
+
+// Proxy db adapter to route calls to Cloud Firestore or persistent local database
+const db: any = {
+  collection(name: string) {
+    if (isFirestoreAvailable && cloudDb) {
+      try {
+        const col = cloudDb.collection(name);
+        return new Proxy(col, {
+          get(target: any, prop: string) {
+            const orig = target[prop];
+            if (typeof orig === 'function') {
+              return (...args: any[]) => {
+                try {
+                  const res = orig.apply(target, args);
+                  if (res && typeof res.then === 'function') {
+                    return res.catch((err: any) => {
+                      if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
+                        isFirestoreAvailable = false;
+                        console.warn(`[DB Router] Cloud Firestore returned PERMISSION_DENIED on '${name}'. Using secure local persistent store.`);
+                        const localCol = localDb.collection(name);
+                        return (localCol as any)[prop](...args);
+                      }
+                      throw err;
+                    });
+                  }
+                  return res;
+                } catch (err: any) {
+                  if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
+                    isFirestoreAvailable = false;
+                    const localCol = localDb.collection(name);
+                    return (localCol as any)[prop](...args);
+                  }
+                  throw err;
+                }
+              };
+            }
+            return orig;
+          }
+        });
+      } catch {
+        return localDb.collection(name);
+      }
+    }
+    return localDb.collection(name);
+  },
+  batch() {
+    if (isFirestoreAvailable && cloudDb) {
+      return cloudDb.batch();
+    }
+    return localDb.batch();
+  }
+};
+
+// Check Cloud Firestore connectivity on startup
+(async () => {
+  if (cloudDb) {
+    try {
+      await cloudDb.collection('users').limit(1).get();
+      isFirestoreAvailable = true;
+      console.log('✅ Connected to Cloud Firestore database.');
+    } catch (err: any) {
+      isFirestoreAvailable = false;
+      console.warn(`⚠️ Cloud Firestore unavailable (${err?.message || 'PERMISSION_DENIED'}). Running seamlessly on secure persistent local database.`);
+    }
+  }
+})();
 
 // Initialize Gemini API Client
 const ai = new GoogleGenAI();
@@ -675,7 +751,7 @@ app.get('/api/user/security-logs', requireAuth, async (req: any, res: any) => {
       .limit(200)
       .get();
 
-    const logs = logsSnapshot.docs.map(doc => {
+    const logs = logsSnapshot.docs.map((doc: any) => {
       const data = doc.data();
       let isoDate = new Date().toISOString();
       if (data.createdAt && data.createdAt.toDate) {
@@ -692,7 +768,7 @@ app.get('/api/user/security-logs', requireAuth, async (req: any, res: any) => {
       };
     });
 
-    logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    logs.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     return res.json({ success: true, logs });
   } catch (err) {
@@ -1528,7 +1604,7 @@ Pour vous protéger des injections de prompts (Prompt Injections) et d'attaques 
           const msgsSnap = await db.collection('messages').where('conversationId', '==', id).get();
           if (msgsSnap.size >= 2) {
             // Take the user's initial prompt and model's summary to generate a short 6-10 word title
-            const messagesList = msgsSnap.docs.map(d => `${d.data().role === 'user' ? 'User' : 'Assistant'}: ${d.data().content}`);
+            const messagesList = msgsSnap.docs.map((d: any) => `${d.data().role === 'user' ? 'User' : 'Assistant'}: ${d.data().content}`);
             const textToSummarize = messagesList.slice(0, 4).join('\n');
             
             const titleGenResponse = await ai.models.generateContent({

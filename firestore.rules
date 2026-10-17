@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Deny all client-side reads and writes because everything goes through the secure Express backend
+    // Deny direct client-side reads and writes as data access is strictly governed by the Express backend API
     match /{document=**} {
       allow read, write: if false;
     }
