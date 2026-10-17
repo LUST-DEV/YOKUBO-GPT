@@ -55,13 +55,18 @@ import {
   Tag,
   ShieldCheck,
   Camera,
-  Keyboard
+  Keyboard,
+  Download,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 
 import { HotkeysModal } from './components/HotkeysModal';
 import { PasswordStrengthMeter } from './components/PasswordStrengthMeter';
 import { UserAvatar } from './components/UserAvatar';
 import { AvatarSelectorModal } from './components/AvatarSelectorModal';
+import { InactivityCountdownModal } from './components/InactivityCountdownModal';
+import { OfficialGmailIcon, OfficialWhatsAppIcon, OfficialGitHubIcon } from './components/OfficialBrandIcons';
 
 interface UserType {
   id: string;
@@ -277,6 +282,21 @@ export default function App() {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHotkeysModal, setShowHotkeysModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+
+  // Inactivity auto-logout states (duration in minutes: 5, 15, 30, 60, or 0 = disabled)
+  const [inactivityTimeout, setInactivityTimeout] = useState<number>(() => {
+    const saved = localStorage.getItem('yokubo_inactivity_timeout');
+    return saved !== null ? parseInt(saved, 10) : 15;
+  });
+  const [showInactivityModal, setShowInactivityModal] = useState(false);
+  const [inactivityCountdown, setInactivityCountdown] = useState(60);
+  const lastActivityRef = useRef<number>(Date.now());
+
+  // Universal sidebar collapsed state (persisted for full focus mode)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('yokubo_sidebar_collapsed') === 'true';
+  });
+
   const [cookieConsent, setCookieConsent] = useState<string | null>(() => {
     return localStorage.getItem('yokubo_cookie_consent');
   });
@@ -639,7 +659,12 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const token = localStorage.getItem('yokubo_token');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch('/api/auth/me', { headers });
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
@@ -647,6 +672,7 @@ export default function App() {
         fetchConversations();
       } else {
         setUser(null);
+        localStorage.removeItem('yokubo_token');
         if (view === 'chat' || view === 'settings' || view === 'admin') {
           setView('landing');
         }
@@ -672,6 +698,104 @@ export default function App() {
       }
     } catch {
       triggerAlert('error', 'Erreur de connexion serveur lors de la mise à jour.');
+    }
+  };
+
+  // Inactivity Auto-Logout Watcher
+  useEffect(() => {
+    if (!user || inactivityTimeout <= 0) {
+      setShowInactivityModal(false);
+      return;
+    }
+
+    lastActivityRef.current = Date.now();
+
+    const handleUserActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    events.forEach((evt) => {
+      window.addEventListener(evt, handleUserActivity, { passive: true });
+    });
+
+    const checkInterval = setInterval(() => {
+      const elapsedMs = Date.now() - lastActivityRef.current;
+      const totalTimeoutMs = inactivityTimeout * 60 * 1000;
+      const warningThresholdMs = Math.max(0, totalTimeoutMs - 60 * 1000); // 60s warning
+
+      if (elapsedMs >= totalTimeoutMs) {
+        clearInterval(checkInterval);
+        setShowInactivityModal(false);
+        handleLogout();
+        triggerAlert('warning', 'Session déconnectée automatiquement pour cause d\'inactivité prolongée.');
+      } else if (elapsedMs >= warningThresholdMs) {
+        const secondsRemaining = Math.max(1, Math.ceil((totalTimeoutMs - elapsedMs) / 1000));
+        setInactivityCountdown(secondsRemaining);
+        setShowInactivityModal(true);
+      } else {
+        setShowInactivityModal(false);
+      }
+    }, 1000);
+
+    return () => {
+      events.forEach((evt) => {
+        window.removeEventListener(evt, handleUserActivity);
+      });
+      clearInterval(checkInterval);
+    };
+  }, [user, inactivityTimeout]);
+
+  const handleStayLoggedIn = () => {
+    lastActivityRef.current = Date.now();
+    setShowInactivityModal(false);
+    triggerAlert('success', 'Session prolongée avec succès.');
+  };
+
+  const handleUpdateInactivityTimeout = (minutes: number) => {
+    setInactivityTimeout(minutes);
+    localStorage.setItem('yokubo_inactivity_timeout', String(minutes));
+    lastActivityRef.current = Date.now();
+    triggerAlert('success', minutes === 0 ? 'Déconnexion automatique désactivée.' : `Délai d'inactivité mis à jour : ${minutes} minutes.`);
+  };
+
+  const handleExportSecurityLogsCSV = async () => {
+    try {
+      const res = await fetch('/api/user/security-logs');
+      if (!res.ok) {
+        throw new Error('Erreur de récupération');
+      }
+      const data = await res.json();
+      const logs = data.logs || [];
+
+      if (logs.length === 0) {
+        triggerAlert('warning', 'Aucun événement de sécurité enregistré à exporter.');
+        return;
+      }
+
+      // Format RFC 4180 CSV
+      const headers = ['Date_UTC', 'Evenement', 'Details', 'Adresse_IP'];
+      const rows = logs.map((log: any) => [
+        `"${(log.createdAt || '').replace(/"/g, '""')}"`,
+        `"${(log.event || '').replace(/"/g, '""')}"`,
+        `"${(log.details || '').replace(/"/g, '""')}"`,
+        `"${(log.ipAddress || '').replace(/"/g, '""')}"`,
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `yokubo-security-audit-${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      triggerAlert('success', 'Journal d\'audit de sécurité exporté (.CSV) avec succès !');
+    } catch (err) {
+      triggerAlert('error', 'Impossible d\'exporter les journaux d\'audit.');
     }
   };
 
@@ -717,6 +841,9 @@ export default function App() {
           triggerAlert('warning', 'Double authentification requise. Entrez votre code 2FA.');
           // Ensure prompt asks for 2FA code
           return;
+        }
+        if (data.token) {
+          localStorage.setItem('yokubo_token', data.token);
         }
         setUser(data.user);
         setView('chat');
@@ -808,13 +935,18 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      const token = localStorage.getItem('yokubo_token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      await fetch('/api/auth/logout', { method: 'POST', headers });
+      localStorage.removeItem('yokubo_token');
       setUser(null);
       setConversations([]);
       setActiveConvId(null);
       setView('landing');
       triggerAlert('success', 'Déconnecté avec succès.');
     } catch {
+      localStorage.removeItem('yokubo_token');
       triggerAlert('error', 'Erreur lors de la déconnexion.');
     }
   };
@@ -1520,7 +1652,7 @@ export default function App() {
                 href="mailto:lustdev927@gmail.com?subject=Support%20YOKUBO%20GPT" 
                 className="text-red-400 hover:text-[#ff0040] hover:underline font-semibold transition-colors flex items-center gap-1.5"
               >
-                <Mail size={12} /> Contact Support
+                <OfficialGmailIcon size={13} className="text-[#EA4335]" /> Contact Support
               </a>
               <span className="text-slate-800">|</span>
               <a 
@@ -1529,7 +1661,7 @@ export default function App() {
                 rel="noopener noreferrer" 
                 className="text-emerald-400 hover:text-emerald-300 hover:underline font-semibold transition-colors flex items-center gap-1.5"
               >
-                <MessageSquare size={12} /> WhatsApp: +1 (829) 478-6326
+                <OfficialWhatsAppIcon size={13} className="text-[#25D366]" /> WhatsApp: +1 (829) 478-6326
               </a>
               <span className="text-slate-800">|</span>
               <a 
@@ -1538,7 +1670,16 @@ export default function App() {
                 rel="noopener noreferrer" 
                 className="text-emerald-400 hover:text-emerald-300 hover:underline font-semibold transition-colors flex items-center gap-1.5"
               >
-                <Globe size={12} /> WhatsApp Channel
+                <OfficialWhatsAppIcon size={13} className="text-[#25D366]" /> WhatsApp Channel
+              </a>
+              <span className="text-slate-800">|</span>
+              <a 
+                href="https://github.com/LUST-DEV" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-slate-300 hover:text-white hover:underline font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <OfficialGitHubIcon size={13} className="text-white" /> GitHub: @LUST-DEV
               </a>
             </div>
           </footer>
@@ -2105,9 +2246,9 @@ export default function App() {
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEndSidebar}
-            className={`fixed md:relative z-40 w-72 h-full border-r gothic-rainbow-glow-wave bg-[#08030f]/98 md:bg-[#08030f]/95 flex flex-col shrink-0 transition-transform duration-300 ${
-              mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-            }`}
+            className={`fixed md:relative z-40 h-full border-r gothic-rainbow-glow-wave bg-[#08030f]/98 md:bg-[#08030f]/95 flex flex-col shrink-0 transition-all duration-300 ${
+              mobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
+            } ${sidebarCollapsed ? 'md:hidden md:w-0 overflow-hidden' : 'md:w-72'}`}
           >
             
             {/* Brand Logo & New Chat */}
@@ -2162,7 +2303,13 @@ export default function App() {
                   .map((conv) => (
                     <div 
                       key={conv.id} 
-                      onClick={() => { setActiveConvId(conv.id); setKeyboardSelectedConvId(conv.id); }}
+                      onClick={() => { 
+                        setActiveConvId(conv.id); 
+                        setKeyboardSelectedConvId(conv.id); 
+                        if (window.innerWidth < 768) {
+                          setMobileSidebarOpen(false);
+                        }
+                      }}
                       tabIndex={0}
                       aria-label={`Salon: ${conv.title}`}
                       className={`group flex items-center justify-between p-2.5 rounded cursor-pointer transition-all duration-200 ${
@@ -2176,6 +2323,9 @@ export default function App() {
                         if (e.key === 'Enter') {
                           setActiveConvId(conv.id);
                           setKeyboardSelectedConvId(conv.id);
+                          if (window.innerWidth < 768) {
+                            setMobileSidebarOpen(false);
+                          }
                         }
                       }}
                     >
@@ -2289,11 +2439,21 @@ export default function App() {
                  <header className="px-6 py-3.5 border-b gothic-rainbow-glow-wave bg-[#08030f]/60 flex items-center justify-between">
                    <div className="flex items-center gap-3">
                      <button
-                       onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-                       className="md:hidden p-1 text-slate-400 hover:text-[#ff0040] transition-colors cursor-pointer"
-                       title="Menu"
+                       onClick={() => {
+                         if (window.innerWidth < 768) {
+                           setMobileSidebarOpen(!mobileSidebarOpen);
+                         } else {
+                           setSidebarCollapsed(!sidebarCollapsed);
+                           localStorage.setItem('yokubo_sidebar_collapsed', String(!sidebarCollapsed));
+                         }
+                       }}
+                       className="p-1.5 bg-[#12041c] hover:bg-[#ff0040]/10 border border-red-500/20 hover:border-[#ff0040]/50 rounded text-slate-300 hover:text-[#ff0040] transition-all cursor-pointer flex items-center gap-1.5"
+                       title={sidebarCollapsed ? "Afficher la barre latérale" : "Masquer la barre latérale (Mode Focus)"}
                      >
-                       <Menu size={18} />
+                       {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+                       <span className="hidden xl:inline text-[9px] font-mono text-slate-400">
+                         {sidebarCollapsed ? "Ouvrir" : "Focus"}
+                       </span>
                      </button>
                      {(() => {
                        const modelNames: Record<string, string> = {
@@ -2774,11 +2934,18 @@ export default function App() {
               // Empty Slate View
               <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-2xl mx-auto text-center space-y-8 relative">
                 <button
-                  onClick={() => setMobileSidebarOpen(true)}
-                  className="md:hidden absolute top-6 left-6 p-2 bg-[#12041c]/50 border border-red-500/10 rounded text-slate-400 hover:text-[#ff0040]"
-                  title="Ouvrir le menu"
+                  onClick={() => {
+                    if (window.innerWidth < 768) {
+                      setMobileSidebarOpen(!mobileSidebarOpen);
+                    } else {
+                      setSidebarCollapsed(!sidebarCollapsed);
+                      localStorage.setItem('yokubo_sidebar_collapsed', String(!sidebarCollapsed));
+                    }
+                  }}
+                  className="absolute top-6 left-6 p-2 bg-[#12041c]/50 hover:bg-[#12041c] border border-red-500/20 rounded text-slate-400 hover:text-[#ff0040] transition-all cursor-pointer flex items-center gap-1.5"
+                  title={sidebarCollapsed ? "Afficher l'historique" : "Masquer l'historique"}
                 >
-                  <Menu size={18} />
+                  {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
                 </button>
 
                 <div className="w-16 h-16 rounded-full bg-[#12041c] border border-red-500/20 flex items-center justify-center gothic-glow-crimson animate-pulse-slow">
@@ -2982,6 +3149,44 @@ export default function App() {
                 )}
               </div>
 
+              {/* Inactivity Auto-Logout Configuration Card */}
+              <div className="p-6 rounded-lg glass-panel space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <Clock size={16} className="text-amber-400" /> Déconnexion Automatique (Inactivité)
+                  </h3>
+                  <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded uppercase">
+                    {inactivityTimeout === 0 ? "Désactivé" : `${inactivityTimeout} min`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed font-mono">
+                  Protégez votre session en cas d'absence. Un avertissement interactif avec compte à rebours de 60 secondes s'affichera avant la fermeture de session.
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                  {[
+                    { value: 5, label: "5 min" },
+                    { value: 15, label: "15 min (Défaut)" },
+                    { value: 30, label: "30 min" },
+                    { value: 60, label: "1 heure" },
+                    { value: 0, label: "Désactivé" }
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => handleUpdateInactivityTimeout(option.value)}
+                      className={`py-2 px-3 rounded text-xs font-mono uppercase tracking-wider border transition-all cursor-pointer ${
+                        inactivityTimeout === option.value
+                          ? 'border-[#ff0040] bg-[#1a041c] text-[#ff0040] font-bold shadow-[0_0_12px_rgba(255,0,64,0.25)]'
+                          : 'border-slate-800 bg-[#07020d] text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Devices & Active Sessions */}
               <div className="p-6 rounded-lg glass-panel space-y-4">
                 <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Sessions & Appareils Actifs</h3>
@@ -3022,6 +3227,34 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Security Audit & Logs Export Card */}
+              <div className="p-6 rounded-lg glass-panel space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-emerald-400" /> Audit & Exportation des Journaux de Sécurité
+                  </h3>
+                  <button 
+                    onClick={handleExportSecurityLogsCSV}
+                    className="px-3.5 py-1.5 rounded text-xs font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer font-display"
+                    title="Télécharger l'historique de vos connexions et événements au format CSV"
+                  >
+                    <Download size={13} /> Exporter .CSV
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed font-mono">
+                  Exportez l'historique complet et sécurisé des accès à votre compte (connexions, modifications d'avatar, réinitialisations et adresses IP) dans un fichier tableur conforme RFC 4180.
+                </p>
+                <div className="flex items-center justify-between p-3 bg-[#050209] border border-white/5 rounded text-xs text-slate-400 font-mono">
+                  <span>Format : CSV Sécurisé (Date UTC, Événement, Détails, IP)</span>
+                  <button
+                    onClick={handleExportSecurityLogsCSV}
+                    className="text-emerald-400 hover:underline cursor-pointer flex items-center gap-1 font-semibold"
+                  >
+                    Télécharger l'Audit →
+                  </button>
+                </div>
+              </div>
+
               {/* Support Card */}
               <div className="p-6 rounded-lg glass-panel space-y-4">
                 <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -3030,12 +3263,12 @@ export default function App() {
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   Besoin d'assistance avec votre compte, l'API ou des fonctionnalités personnalisées ? Contactez notre support par Email ou WhatsApp.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                   <a 
                     href="mailto:lustdev927@gmail.com?subject=Support%20YOKUBO%20GPT"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded hover:bg-cyan-500/20 text-xs font-semibold uppercase tracking-wider transition-all"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded hover:bg-red-500/20 text-xs font-semibold uppercase tracking-wider transition-all"
                   >
-                    <Mail size={14} /> Contact Support
+                    <OfficialGmailIcon size={14} className="text-[#EA4335]" /> lustdev927@gmail.com
                   </a>
                   <a 
                     href="https://wa.me/18294786326"
@@ -3043,7 +3276,7 @@ export default function App() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20 text-xs font-semibold uppercase tracking-wider transition-all"
                   >
-                    <MessageSquare size={14} /> +1 (829) 478-6326
+                    <OfficialWhatsAppIcon size={14} className="text-[#25D366]" /> +1 (829) 478-6326
                   </a>
                   <a 
                     href="https://whatsapp.com/channel/0029VbCiqwyBVJl3Jv5T4I15"
@@ -3051,7 +3284,15 @@ export default function App() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20 text-xs font-semibold uppercase tracking-wider transition-all"
                   >
-                    <Globe size={14} /> WhatsApp Channel
+                    <OfficialWhatsAppIcon size={14} className="text-[#25D366]" /> Canal WhatsApp
+                  </a>
+                  <a 
+                    href="https://github.com/LUST-DEV"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800/60 text-slate-200 border border-slate-700/60 rounded hover:bg-slate-800 text-xs font-semibold uppercase tracking-wider transition-all"
+                  >
+                    <OfficialGitHubIcon size={14} className="text-white" /> GitHub @LUST-DEV
                   </a>
                 </div>
               </div>

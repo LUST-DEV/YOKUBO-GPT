@@ -177,7 +177,9 @@ async function logSecurityEvent(event: string, details: string, userId: string |
 
 // Session Validation Middleware
 const requireAuth = async (req: any, res: any, next: any) => {
-  const sessionToken = req.cookies.yokubo_session;
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  const sessionToken = req.cookies?.yokubo_session || bearerToken;
   if (!sessionToken) {
     return res.status(401).json({ error: 'Non authentifié' });
   }
@@ -537,14 +539,58 @@ app.post('/api/auth/login',
     res.cookie('yokubo_session', sessionToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'strict',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
     logSecurityEvent('login_success', `Connexion réussie pour ${normalizedEmail}`, userDoc.id);
 
+    // Send warm welcome & tools overview email upon login
+    const welcomeHtml = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #06020a; color: #ffffff; padding: 40px; border-radius: 12px; max-width: 620px; border: 1px solid rgba(255, 0, 64, 0.2); box-shadow: 0 0 30px rgba(255, 0, 64, 0.15);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #ff0040; margin: 0; font-size: 24px; letter-spacing: 3px; text-transform: uppercase;">『欲』 YOKUBO GPT</h1>
+          <p style="color: #94a3b8; font-size: 11px; margin-top: 6px; letter-spacing: 2px; text-transform: uppercase;">Assistant d'Élite par LUST DEV</p>
+        </div>
+
+        <p style="font-size: 15px; color: #f1f5f9; line-height: 1.6;">
+          Bonjour <strong>${userData.name || 'Agent'}</strong>, ravi de vous retrouver sur votre espace sécurisé.
+        </p>
+
+        <p style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
+          Votre session est active et protégée par notre forteresse de sécurité. Voici un rappel des outils exclusifs à votre disposition :
+        </p>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0; font-size: 13px; color: #00e5ff; font-weight: bold;">⚡ MOTEURS D'IA & OUTILS INTÉGRÉS :</p>
+          <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #94a3b8; line-height: 1.8;">
+            <li><strong>YOKUBO AUTO :</strong> Routage prédictif dynamique vers le modèle le plus adapté à votre requête.</li>
+            <li><strong>Gemini 2.5 Pro (Haute Réflexion) :</strong> Visualisation pas-à-pas de l'arborescence de pensée interne.</li>
+            <li><strong>Claude 3.5 Sonnet, Mistral Large & DeepSeek :</strong> Modèles d'experts pour le code et l'analyse.</li>
+            <li><strong>Raccourcis Clavier Rapides :</strong> Pressez <code>Ctrl + /</code> pour afficher la liste complète des raccourcis (Ctrl+K, Ctrl+N, Ctrl+S).</li>
+            <li><strong>Exportation d'Audit Sécurisé :</strong> Téléchargez l'historique de vos accès au format CSV dans les Paramètres.</li>
+          </ul>
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 25px; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 15px;">
+          Une question ou un besoin spécifique ? Contactez le créateur directement à <a href="mailto:lustdev927@gmail.com" style="color: #ff0040; text-decoration: none; font-weight: bold;">lustdev927@gmail.com</a>.
+        </p>
+        <p style="font-size: 10px; color: #475569; text-align: center; margin-top: 20px;">
+          © 2026 YOKUBO GPT — LUST DEV. "Beyond the clouds, beyond the limits."
+        </p>
+      </div>
+    `;
+
+    sendNotificationEmail(
+      normalizedEmail,
+      'Bienvenue sur YOKUBO GPT — Votre Assistant d\'Élite',
+      welcomeHtml,
+      `Bonjour ${userData.name}. Ravi de vous retrouver sur YOKUBO GPT. Votre session est active.`
+    ).catch(e => console.error('Failed to send welcome login email:', e));
+
     return res.json({
       success: true,
+      token: sessionToken,
       user: {
         id: userDoc.id,
         email: userData.email,
@@ -618,6 +664,40 @@ app.put('/api/user/avatar', requireAuth, async (req: any, res: any) => {
   } catch (err) {
     console.error('Update avatar error:', err);
     return res.status(500).json({ error: 'Impossible de mettre à jour l\'avatar.' });
+  }
+});
+
+// User personal security audit logs for CSV export
+app.get('/api/user/security-logs', requireAuth, async (req: any, res: any) => {
+  try {
+    const logsSnapshot = await db.collection('security_logs')
+      .where('userId', '==', req.user.id)
+      .limit(200)
+      .get();
+
+    const logs = logsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      let isoDate = new Date().toISOString();
+      if (data.createdAt && data.createdAt.toDate) {
+        isoDate = data.createdAt.toDate().toISOString();
+      } else if (data.timestamp && data.timestamp.toDate) {
+        isoDate = data.timestamp.toDate().toISOString();
+      }
+      return {
+        id: doc.id,
+        event: data.event || data.eventType || 'SECURITY_EVENT',
+        details: data.details || data.description || '',
+        ipAddress: data.ipAddress || 'internal',
+        createdAt: isoDate,
+      };
+    });
+
+    logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.json({ success: true, logs });
+  } catch (err) {
+    console.error('Error fetching user security logs:', err);
+    return res.status(500).json({ error: 'Impossible de récupérer les journaux de sécurité.' });
   }
 });
 

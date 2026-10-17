@@ -126,13 +126,25 @@ Ce projet est prêt pour le déploiement sur les plateformes Cloud :
 
 Développé avec passion et exigence par **LUST DEV**.
 
-- **Email Support :** [valerylusty@gmail.com](mailto:valerylusty@gmail.com)
-- **WhatsApp :** [+1 (829) 478-6326](https://wa.me/18294786326)
-- **Canal WhatsApp :** [LUST DEV Channel](https://whatsapp.com/channel/0029VbCiqwyBVJl3Jv5T4I15)
-- **GitHub :** [@LUST-DEV](https://github.com/LUST-DEV)
+<div align="center">
+
+| Plateforme | Lien Officiel |
+| :--- | :--- |
+| **Email Officiel** | [![Email Support](https://img.shields.io/badge/Email-lustdev927%40gmail.com-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:lustdev927@gmail.com) |
+| **WhatsApp Support** | [![WhatsApp](https://img.shields.io/badge/WhatsApp-+1_(829)_478--6326-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/18294786326) |
+| **Canal WhatsApp** | [![WhatsApp Channel](https://img.shields.io/badge/Canal_WhatsApp-LUST_DEV-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://whatsapp.com/channel/0029VbCiqwyBVJl3Jv5T4I15) |
+| **GitHub Officiel** | [![GitHub](https://img.shields.io/badge/GitHub-LUST--DEV-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/LUST-DEV) |
+
+</div>
+
+- 📧 **Email :** [lustdev927@gmail.com](mailto:lustdev927@gmail.com)
+- 💬 **WhatsApp Direct :** [+1 (829) 478-6326](https://wa.me/18294786326)
+- 📢 **Canal Communautaire :** [LUST DEV Channel](https://whatsapp.com/channel/0029VbCiqwyBVJl3Jv5T4I15)
+- 🐙 **Dépôt & Profil :** [@LUST-DEV](https://github.com/LUST-DEV)
 
 ---
 
 <p align="center">
   <em>"Beyond the clouds, beyond the limits." — LUST DEV</em>
 </p>
+
