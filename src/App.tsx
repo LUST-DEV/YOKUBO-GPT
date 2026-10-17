@@ -58,7 +58,11 @@ import {
   Keyboard,
   Download,
   PanelLeftClose,
-  PanelLeft
+  PanelLeft,
+  Folder,
+  FolderOpen,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 import { HotkeysModal } from './components/HotkeysModal';
@@ -83,6 +87,7 @@ interface Conversation {
   title: string;
   modelId: string;
   isArchived: boolean;
+  folder?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -244,6 +249,11 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isArchivedFolderOpen, setIsArchivedFolderOpen] = useState<boolean>(() => {
+    return localStorage.getItem('yokubo_archives_expanded') === 'true';
+  });
+  const [isDraftSaved, setIsDraftSaved] = useState(false);
+  const isRestoringDraftRef = useRef(false);
   const [selectedModel, setSelectedModel] = useState('yokubo-auto');
   const [searchQuery, setSearchQuery] = useState('');
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
@@ -270,6 +280,13 @@ export default function App() {
 
   const [keyboardSelectedConvId, setKeyboardSelectedConvId] = useState<string | null>(null);
   const wordCount = chatInput.trim() ? chatInput.trim().split(/\s+/).length : 0;
+  
+  // Categorized conversation collections
+  const filteredConversations = (conversations || []).filter(c => 
+    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const activeConversations = filteredConversations.filter(c => !c.isArchived);
+  const archivedConversations = filteredConversations.filter(c => c.isArchived);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -627,14 +644,47 @@ export default function App() {
     return () => clearInterval(interval);
   }, [view]);
 
-  // Load chat messages when active conversation changes
+  // Load chat messages and restore saved draft when active conversation changes
   useEffect(() => {
     if (activeConvId) {
       fetchMessages(activeConvId);
     } else {
       setMessages([]);
     }
+
+    // Auto-restore scoped draft for this conversation (or 'new' draft)
+    isRestoringDraftRef.current = true;
+    const draftKey = `yokubo_draft_${activeConvId || 'new'}`;
+    const savedDraft = localStorage.getItem(draftKey) || '';
+    setChatInput(savedDraft);
+    setIsDraftSaved(Boolean(savedDraft.trim()));
+    const t = setTimeout(() => {
+      isRestoringDraftRef.current = false;
+    }, 50);
+    return () => clearTimeout(t);
   }, [activeConvId]);
+
+  // Debounced auto-save mechanism for chat input (400ms) to prevent data loss on refresh
+  useEffect(() => {
+    if (isRestoringDraftRef.current) return;
+    const draftKey = `yokubo_draft_${activeConvId || 'new'}`;
+
+    const timer = setTimeout(() => {
+      if (chatInput.trim()) {
+        try {
+          localStorage.setItem(draftKey, chatInput);
+          setIsDraftSaved(true);
+        } catch {}
+      } else {
+        try {
+          localStorage.removeItem(draftKey);
+          setIsDraftSaved(false);
+        } catch {}
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [chatInput, activeConvId]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -961,8 +1011,40 @@ export default function App() {
     } catch {}
   };
 
+  const handleSelectConversation = (convId: string) => {
+    // Persist pending draft for current conversation before switching
+    const currentDraftKey = `yokubo_draft_${activeConvId || 'new'}`;
+    if (chatInput.trim()) {
+      try { localStorage.setItem(currentDraftKey, chatInput); } catch {}
+    } else {
+      try { localStorage.removeItem(currentDraftKey); } catch {}
+    }
+
+    setActiveConvId(convId);
+    setKeyboardSelectedConvId(convId);
+    if (window.innerWidth < 768) {
+      setMobileSidebarOpen(false);
+    }
+  };
+
+  const toggleArchivedFolder = () => {
+    setIsArchivedFolderOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('yokubo_archives_expanded', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const handleCreateChat = async () => {
     try {
+      // Persist pending draft for current conversation before creating new chat
+      const currentDraftKey = `yokubo_draft_${activeConvId || 'new'}`;
+      if (chatInput.trim()) {
+        try { localStorage.setItem(currentDraftKey, chatInput); } catch {}
+      }
+
       const res = await fetch('/api/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1003,6 +1085,8 @@ export default function App() {
 
   const handleArchiveConversation = async (convId: string, isArchived: boolean) => {
     try {
+      // Optimistic update
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, isArchived } : c));
       const res = await fetch(`/api/conversations/${convId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1010,12 +1094,13 @@ export default function App() {
       });
       if (res.ok) {
         fetchConversations();
-        if (activeConvId === convId) {
-          setActiveConvId(null);
-        }
-        triggerAlert('success', isArchived ? 'Salon archivé.' : 'Salon désarchivé.');
+        triggerAlert('success', isArchived ? 'Salon déplacé dans les archives.' : 'Salon réactivé dans les discussions.');
+      } else {
+        fetchConversations();
       }
-    } catch {}
+    } catch {
+      fetchConversations();
+    }
   };
 
   const handleDeleteConversation = async (convId: string) => {
@@ -1126,6 +1211,12 @@ export default function App() {
     const promptText = chatInput;
     setChatInput('');
     setIsGenerating(true);
+    // Clear auto-saved draft for this conversation upon message send
+    const currentDraftKey = `yokubo_draft_${activeConvId || 'new'}`;
+    try {
+      localStorage.removeItem(currentDraftKey);
+      setIsDraftSaved(false);
+    } catch {}
 
     // Optimistically add user message to list
     const tempUserMsg: Message = {
@@ -2295,21 +2386,25 @@ export default function App() {
               </div>
             </div>
 
-            {/* Chats History List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {conversations && conversations.length > 0 ? (
-                conversations
-                  .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((conv) => (
+            {/* Categorized Chats Folders */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-3">
+              {/* Active Discussions Folder */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold select-none">
+                  <span className="flex items-center gap-1.5">
+                    <FolderOpen size={12} className="text-[#ff0040]" />
+                    <span>Discussions Actives</span>
+                  </span>
+                  <span className="tabular-nums text-slate-500 text-[10px]">
+                    {activeConversations.length}
+                  </span>
+                </div>
+
+                {activeConversations.length > 0 ? (
+                  activeConversations.map((conv) => (
                     <div 
                       key={conv.id} 
-                      onClick={() => { 
-                        setActiveConvId(conv.id); 
-                        setKeyboardSelectedConvId(conv.id); 
-                        if (window.innerWidth < 768) {
-                          setMobileSidebarOpen(false);
-                        }
-                      }}
+                      onClick={() => handleSelectConversation(conv.id)}
                       tabIndex={0}
                       aria-label={`Salon: ${conv.title}`}
                       className={`group flex items-center justify-between p-2.5 rounded cursor-pointer transition-all duration-200 ${
@@ -2321,11 +2416,7 @@ export default function App() {
                       }`}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          setActiveConvId(conv.id);
-                          setKeyboardSelectedConvId(conv.id);
-                          if (window.innerWidth < 768) {
-                            setMobileSidebarOpen(false);
-                          }
+                          handleSelectConversation(conv.id);
                         }
                       }}
                     >
@@ -2348,10 +2439,10 @@ export default function App() {
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleArchiveConversation(conv.id, !conv.isArchived);
+                            handleArchiveConversation(conv.id, true);
                           }}
                           className="p-1 hover:text-amber-400 text-slate-600 transition-colors"
-                          title={conv.isArchived ? "Désarchiver" : "Archiver"}
+                          title="Archiver ce salon"
                         >
                           <Archive size={12} />
                         </button>
@@ -2368,11 +2459,104 @@ export default function App() {
                       </div>
                     </div>
                   ))
-              ) : (
-                <div className="text-center py-12 text-[11px] text-slate-600 font-mono">
-                  Aucune conversation active.
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-4 text-[11px] text-slate-600 font-mono">
+                    Aucune discussion active.
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsible Archives Folder */}
+              <div className="pt-2 border-t border-red-500/10 space-y-1">
+                <button
+                  type="button"
+                  onClick={toggleArchivedFolder}
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider text-slate-400 hover:text-amber-400 font-semibold select-none transition-colors rounded hover:bg-white/5 cursor-pointer"
+                  title={isArchivedFolderOpen ? "Replier les archives" : "Déplier les archives"}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {isArchivedFolderOpen ? (
+                      <ChevronDown size={12} className="text-amber-400 transition-transform" />
+                    ) : (
+                      <ChevronRight size={12} className="text-slate-500 transition-transform" />
+                    )}
+                    <Archive size={12} className="text-amber-500/80" />
+                    <span>Archives</span>
+                  </span>
+                  <span className="tabular-nums text-slate-500 text-[10px]">
+                    {archivedConversations.length}
+                  </span>
+                </button>
+
+                {isArchivedFolderOpen && (
+                  <div className="space-y-1 pt-1">
+                    {archivedConversations.length > 0 ? (
+                      archivedConversations.map((conv) => (
+                        <div 
+                          key={conv.id} 
+                          onClick={() => handleSelectConversation(conv.id)}
+                          tabIndex={0}
+                          aria-label={`Salon archivé: ${conv.title}`}
+                          className={`group flex items-center justify-between p-2.5 rounded cursor-pointer transition-all duration-200 ${
+                            activeConvId === conv.id 
+                              ? 'bg-[#1b0a2a] text-amber-200 border-l-2 border-amber-500/80 shadow-sm' 
+                              : keyboardSelectedConvId === conv.id
+                                ? 'bg-white/5 text-slate-300 border-l-2 border-slate-500'
+                                : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
+                          }`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSelectConversation(conv.id);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-2 max-w-[170px] truncate">
+                            <Archive size={13} className={activeConvId === conv.id ? 'text-amber-400' : 'text-slate-600'} />
+                            <span className="text-xs font-normal truncate font-sans text-slate-400 group-hover:text-slate-300">{conv.title}</span>
+                          </div>
+                          <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newTitle = prompt('Nouveau titre:', conv.title);
+                                if (newTitle) handleRenameConversation(conv.id, newTitle);
+                              }}
+                              className="p-1 hover:text-[#ff0040] text-slate-600 transition-colors"
+                              title="Renommer"
+                            >
+                              <FileText size={12} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleArchiveConversation(conv.id, false);
+                              }}
+                              className="p-1 hover:text-emerald-400 text-slate-600 transition-colors"
+                              title="Désarchiver (remettre dans les discussions actives)"
+                            >
+                              <RefreshCw size={12} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteConversation(conv.id);
+                              }}
+                              className="p-1 hover:text-red-500 text-slate-600 transition-colors"
+                              title="Supprimer définitivement"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-3 text-[10px] text-slate-600 font-mono italic">
+                        Aucune discussion archivée.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Compliance Legal Footer Links */}
@@ -2888,6 +3072,17 @@ export default function App() {
                         disabled={isGenerating}
                         className="flex-1 bg-transparent border-0 px-4 py-3.5 text-xs text-slate-200 focus:outline-none placeholder-slate-700"
                       />
+
+                      {/* Auto-save Draft Status Indicator */}
+                      {isDraftSaved && (
+                        <div 
+                          className="text-[10px] font-mono text-emerald-400 select-none px-2 transition-all shrink-0 flex items-center gap-1"
+                          title="Brouillon sauvegardé automatiquement dans le navigateur"
+                        >
+                          <Check size={11} className="text-emerald-400" />
+                          <span className="hidden sm:inline">Brouillon</span>
+                        </div>
+                      )}
 
                       {/* Word Count Indicator */}
                       <div className="text-[10px] font-mono text-slate-500 hover:text-slate-400 select-none px-2 transition-all shrink-0">
