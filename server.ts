@@ -47,44 +47,75 @@ try {
 const localDb = new LocalFirestore();
 let isFirestoreAvailable = false;
 
+// Recursive resilient proxy ensuring any Cloud Firestore failure or permission denial
+// seamlessly delegates to the local persistent database without throwing PERMISSION_DENIED
+function createResilientProxy(cloudTarget: any, localTarget: any): any {
+  if (!cloudTarget) return localTarget;
+
+  return new Proxy(cloudTarget, {
+    get(target: any, prop: string) {
+      // Check if Cloud Firestore is currently marked active
+      if (!isFirestoreAvailable) {
+        const localVal = localTarget[prop];
+        return typeof localVal === 'function' ? localVal.bind(localTarget) : localVal;
+      }
+
+      const orig = target[prop];
+      if (typeof orig === 'function') {
+        return (...args: any[]) => {
+          try {
+            const res = orig.apply(target, args);
+            // If function call returned a Promise (e.g., .get(), .set(), .add(), .update(), .delete(), .commit())
+            if (res && typeof res.then === 'function') {
+              return res.catch((err: any) => {
+                const msg = err?.message || String(err);
+                if (err?.code === 7 || msg.includes('PERMISSION_DENIED') || msg.includes('Missing or insufficient permissions')) {
+                  isFirestoreAvailable = false;
+                  console.warn(`[DB Router] Cloud Firestore error (${msg}). Switched seamlessly to local persistent store.`);
+                  const localFn = localTarget[prop];
+                  if (typeof localFn === 'function') {
+                    return localFn.apply(localTarget, args);
+                  }
+                  return (localTarget as any)[prop];
+                }
+                throw err;
+              });
+            }
+            // If function call returned a Query, CollectionReference, or DocumentReference
+            if (res && typeof res === 'object') {
+              const localRes = typeof localTarget[prop] === 'function'
+                ? localTarget[prop](...args)
+                : localTarget[prop];
+              return createResilientProxy(res, localRes);
+            }
+            return res;
+          } catch (err: any) {
+            const msg = err?.message || String(err);
+            if (err?.code === 7 || msg.includes('PERMISSION_DENIED') || msg.includes('Missing or insufficient permissions')) {
+              isFirestoreAvailable = false;
+              const localFn = localTarget[prop];
+              if (typeof localFn === 'function') {
+                return localFn.apply(localTarget, args);
+              }
+              return (localTarget as any)[prop];
+            }
+            throw err;
+          }
+        };
+      }
+      return orig;
+    }
+  });
+}
+
 // Proxy db adapter to route calls to Cloud Firestore or persistent local database
 const db: any = {
   collection(name: string) {
     if (isFirestoreAvailable && cloudDb) {
       try {
         const col = cloudDb.collection(name);
-        return new Proxy(col, {
-          get(target: any, prop: string) {
-            const orig = target[prop];
-            if (typeof orig === 'function') {
-              return (...args: any[]) => {
-                try {
-                  const res = orig.apply(target, args);
-                  if (res && typeof res.then === 'function') {
-                    return res.catch((err: any) => {
-                      if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-                        isFirestoreAvailable = false;
-                        console.warn(`[DB Router] Cloud Firestore returned PERMISSION_DENIED on '${name}'. Using secure local persistent store.`);
-                        const localCol = localDb.collection(name);
-                        return (localCol as any)[prop](...args);
-                      }
-                      throw err;
-                    });
-                  }
-                  return res;
-                } catch (err: any) {
-                  if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-                    isFirestoreAvailable = false;
-                    const localCol = localDb.collection(name);
-                    return (localCol as any)[prop](...args);
-                  }
-                  throw err;
-                }
-              };
-            }
-            return orig;
-          }
-        });
+        const localCol = localDb.collection(name);
+        return createResilientProxy(col, localCol);
       } catch {
         return localDb.collection(name);
       }
@@ -93,7 +124,13 @@ const db: any = {
   },
   batch() {
     if (isFirestoreAvailable && cloudDb) {
-      return cloudDb.batch();
+      try {
+        const batch = cloudDb.batch();
+        const localBatch = localDb.batch();
+        return createResilientProxy(batch, localBatch);
+      } catch {
+        return localDb.batch();
+      }
     }
     return localDb.batch();
   }
@@ -121,12 +158,30 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 
 const app = express();
 
-// Standard Security Headers (similar to Helmet but self-contained to avoid extra packages)
+// Trust Railway and Cloud Reverse Proxies
+app.enable('trust proxy');
+app.set('trust proxy', 1);
+
+// Dedicated Health Check Endpoints for Railway, Docker, Render, Cloud Run
+app.get(['/health', '/api/health', '/ping'], (_req: any, res: any) => {
+  return res.status(200).json({
+    status: 'ok',
+    service: 'YOKUBO GPT',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    database: isFirestoreAvailable ? 'cloud-firestore' : 'persistent-local'
+  });
+});
+
+// Standard Security Headers
 app.use((req: any, res: any, next: any) => {
-  // Force HTTPS in production
+  // Never redirect healthchecks or internal localhost requests to HTTPS
+  const host = req.headers.host || '';
+  const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('0.0.0.0');
   const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.secure;
-  if (!isHttps && process.env.NODE_ENV === 'production') {
-    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  
+  if (!isLocalhost && !isHttps && process.env.NODE_ENV === 'production') {
+    return res.redirect(301, `https://${host}${req.url}`);
   }
   
   // HSTS (Strict-Transport-Security) — force HTTPS for 1 year including subdomains and preload
@@ -137,6 +192,9 @@ app.use((req: any, res: any, next: any) => {
   
   // X-Content-Type-Options to prevent MIME sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Referrer-Policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   
   // X-XSS-Protection to enable browser XSS filters
   res.setHeader('X-XSS-Protection', '1; mode=block');
