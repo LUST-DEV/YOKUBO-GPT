@@ -2,7 +2,12 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
-import {defineConfig} from 'vite';
+import { fileURLToPath } from 'url';
+import { defineConfig } from 'vite';
+
+const currentDir = typeof import.meta.dirname === 'string' 
+  ? import.meta.dirname 
+  : path.dirname(fileURLToPath(import.meta.url));
 
 // Automated Vite plugin for sitemap generation
 const sitemapPlugin = () => {
@@ -10,9 +15,9 @@ const sitemapPlugin = () => {
     name: 'generate-sitemap',
     closeBundle() {
       try {
-        const publicDir = path.resolve(__dirname, 'public');
+        const publicDir = path.resolve(currentDir, 'public');
         if (!fs.existsSync(publicDir)) {
-          fs.mkdirSync(publicDir);
+          fs.mkdirSync(publicDir, { recursive: true });
         }
         const sitemapPath = path.resolve(publicDir, 'sitemap.xml');
         const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
@@ -51,8 +56,12 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss(), sitemapPlugin()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(currentDir, '.'),
+        'react-is': path.resolve(currentDir, 'node_modules/react-is'),
       },
+    },
+    build: {
+      chunkSizeWarningLimit: 2000,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

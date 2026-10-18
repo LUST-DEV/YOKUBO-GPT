@@ -10,3 +10,5 @@ coverage/
 .aistudio
 server.js
 .data/
+bun.lock
+bun.lockb
