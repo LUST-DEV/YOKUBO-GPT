@@ -10,6 +10,10 @@ import crypto from 'crypto';
 import { Resend } from 'resend';
 import fs from 'fs';
 import { body, validationResult } from 'express-validator';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load Firebase applet configuration
 const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');

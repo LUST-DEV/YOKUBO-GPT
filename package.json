@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --outfile=server.js --format=esm --external:vite --external:express --external:dotenv --external:firebase-admin",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --packages=external --format=esm --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --outfile=server.js",
     "start": "node server.js",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
