@@ -1,8 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
 @import "tailwindcss";
 
 @layer base {
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
-
   html {
     -webkit-text-size-adjust: 100%;
     touch-action: manipulation;
@@ -15,6 +14,14 @@
     overflow-x: hidden;
     background-image: radial-gradient(circle at 50% 120%, #110521 0%, #050308 80%);
     -webkit-text-size-adjust: 100%;
+    min-height: 100vh;
+  }
+
+  /* Light mode root styling */
+  html.light body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    background-image: radial-gradient(circle at 50% 0%, #ffffff 0%, #f1f5f9 60%, #e2e8f0 100%);
   }
   
   .font-display {
@@ -28,6 +35,64 @@
   }
 }
 
+/* =========================================================================
+   Smooth Theme Transition System
+   Applied dynamically during switching to smoothly interpolate colors/borders
+   ========================================================================= */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              fill 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              stroke 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition-delay: 0s !important;
+}
+
+/* Subtle Theme Switching Animations (ANN UIX) */
+@keyframes theme-wave-bloom {
+  0% {
+    transform: scale(0.1);
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(85);
+    opacity: 0;
+  }
+}
+
+@keyframes theme-ambient-dissolve {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes theme-ring-expand {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.8;
+  }
+  60% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(65);
+    opacity: 0;
+  }
+}
+
 /* Premium, Quiet Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
@@ -38,13 +103,25 @@
   background: #050308;
 }
 
+html.light ::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 99px;
 }
 
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.15);
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.3);
 }
 
 /* Elegant, Professional glassmorphism & depths (Zero-slop / Linear-style) */
@@ -55,6 +132,15 @@
   box-shadow: 
     0 12px 30px rgba(0, 0, 0, 0.6), 
     inset 0 1px 1px rgba(255, 255, 255, 0.03);
+}
+
+html.light .glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 
+    0 12px 30px rgba(0, 0, 0, 0.05), 
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 .glass-panel-hover {
@@ -69,12 +155,27 @@
   transform: translateY(-1px);
 }
 
+html.light .glass-panel-hover:hover {
+  border-color: rgba(203, 213, 225, 0.9);
+  box-shadow: 
+    0 20px 40px rgba(15, 23, 42, 0.08), 
+    inset 0 1px 1px rgba(255, 255, 255, 0.95);
+}
+
 .gothic-glow-crimson {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.02);
 }
 
+html.light .gothic-glow-crimson {
+  box-shadow: 0 4px 15px rgba(255, 0, 64, 0.12);
+}
+
 .gothic-glow-purple {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.02);
+}
+
+html.light .gothic-glow-purple {
+  box-shadow: 0 4px 15px rgba(153, 0, 255, 0.12);
 }
 
 /* Beautiful custom model-aware subtle outline glow wave (Dynamic & quiet) */
@@ -94,8 +195,17 @@
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
+html.light .gothic-rainbow-glow-wave {
+  border-color: rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03) !important;
+}
+
 .gothic-rainbow-text {
   color: #f1f5f9;
+}
+
+html.light .gothic-rainbow-text {
+  color: #0f172a;
 }
 
 /* Standard Premium UI Buttons */
@@ -119,6 +229,18 @@
   transform: translateY(0) scale(0.99);
 }
 
+html.light .gothic-btn-primary {
+  background: #0f172a;
+  color: #ffffff;
+  border: 1px solid #1e293b;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+html.light .gothic-btn-primary:hover {
+  background: #1e293b;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+}
+
 .gothic-btn-secondary {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -130,6 +252,116 @@
   border-color: rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
   transform: translateY(-1px);
+}
+
+html.light .gothic-btn-secondary {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  color: #0f172a;
+}
+
+html.light .gothic-btn-secondary:hover {
+  background: rgba(241, 245, 249, 0.9);
+  border-color: rgba(203, 213, 225, 0.9);
+}
+
+/* =========================================================================
+   ANN UIX Design Rules for Light Mode Adaptations
+   ========================================================================= */
+html.light .bg-\[\#040108\],
+html.light .bg-\[\#050308\],
+html.light .bg-\[\#05020a\],
+html.light .bg-\[\#050209\],
+html.light .bg-\[\#08030f\],
+html.light .bg-\[\#08030f\]\/60,
+html.light .bg-\[\#08030f\]\/95,
+html.light .bg-\[\#08030f\]\/98,
+html.light .bg-\[\#05020a\]\/95 {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+
+html.light .bg-\[\#040108\]\/85 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html.light .bg-\[\#12041c\],
+html.light .bg-\[\#1a082b\],
+html.light .bg-\[\#100418\],
+html.light .bg-\[\#0e0414\],
+html.light .bg-\[\#090310\],
+html.light .bg-\[\#08020e\] {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light .bg-\[\#1b0a2a\] {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.light aside {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light main {
+  background-color: #f8fafc !important;
+}
+
+html.light header {
+  border-color: #e2e8f0 !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(16px);
+}
+
+html.light .text-slate-100,
+html.light .text-slate-200,
+html.light .text-slate-300 {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+html.light .border-slate-800,
+html.light .border-slate-900,
+html.light .border-white\/5,
+html.light .border-white\/10 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .border-red-500\/10,
+html.light .border-red-500\/15,
+html.light .border-red-500\/20 {
+  border-color: rgba(244, 63, 94, 0.22) !important;
+}
+
+html.light pre {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+html.light pre code {
+  color: #0f172a !important;
+}
+
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
 }
 
 /* Soft Animations */

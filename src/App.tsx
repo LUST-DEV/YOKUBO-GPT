@@ -62,7 +62,10 @@ import {
   Folder,
   FolderOpen,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon,
+  Palette
 } from 'lucide-react';
 
 import { HotkeysModal } from './components/HotkeysModal';
@@ -71,6 +74,8 @@ import { UserAvatar } from './components/UserAvatar';
 import { AvatarSelectorModal } from './components/AvatarSelectorModal';
 import { InactivityCountdownModal } from './components/InactivityCountdownModal';
 import { OfficialGmailIcon, OfficialWhatsAppIcon, OfficialGitHubIcon } from './components/OfficialBrandIcons';
+import { ThemeTransitionOverlay, ThemeOverlayState } from './components/ThemeTransitionOverlay';
+import { ThemeToggleBtn } from './components/ThemeToggleBtn';
 
 interface UserType {
   id: string;
@@ -215,14 +220,49 @@ export default function App() {
     return systemPrefersDark ? 'dark' : 'light';
   });
 
+  // State for subtle ANN UIX theme switching animation overlay
+  const [themeOverlay, setThemeOverlay] = useState<ThemeOverlayState | null>(null);
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
     }
     localStorage.setItem('yokubo-theme', theme);
   }, [theme]);
+
+  // Premium ANN UIX Theme Switching Handler: smooth CSS transitions + ripple animation overlay
+  const handleToggleTheme = (targetTheme?: 'dark' | 'light', e?: React.MouseEvent) => {
+    const nextTheme = targetTheme || (theme === 'dark' ? 'light' : 'dark');
+    if (nextTheme === theme) return;
+
+    // Capture click epicenter for radial bloom wave
+    let pos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    if (e && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+      pos = { x: e.clientX, y: e.clientY };
+    }
+
+    // Trigger subtle bloom animation overlay
+    setThemeOverlay({
+      targetTheme: nextTheme,
+      pos,
+      timestamp: Date.now()
+    });
+
+    // Activate global smooth CSS transition class
+    document.documentElement.classList.add('theme-transitioning');
+
+    // Update theme state
+    setTheme(nextTheme);
+
+    // Clean up transition class after interpolation completes (prevents idle layout shift)
+    setTimeout(() => {
+      document.documentElement.classList.remove('theme-transitioning');
+    }, 650);
+  };
   
   // Auth inputs
   const [emailInput, setEmailInput] = useState('');
@@ -1494,6 +1534,12 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#040108] relative overflow-x-hidden">
       
+      {/* Subtle ANN UIX Theme Transition Overlay (Silky Smooth Radial Ripple & Bloom) */}
+      <ThemeTransitionOverlay 
+        overlayState={themeOverlay} 
+        onAnimationEnd={() => setThemeOverlay(null)} 
+      />
+
       {/* Background Gothic Ambient Glow Grid & Orbs */}
       <div className="absolute inset-0 gothic-grid-bg opacity-30 pointer-events-none"></div>
       <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-gradient-to-br from-[#ff0040]/15 to-transparent rounded-full blur-[140px] pointer-events-none animate-breath-gothic-1"></div>
@@ -1581,6 +1627,7 @@ export default function App() {
 
             {/* Zone 3: Primary Actions */}
             <div className="flex items-center gap-3">
+              <ThemeToggleBtn theme={theme} onToggle={handleToggleTheme} size="sm" />
               <button 
                 onClick={() => setView('login')}
                 className="gothic-btn-secondary px-5 py-2 text-[10px] font-bold tracking-widest uppercase rounded cursor-pointer font-display"
@@ -2828,6 +2875,13 @@ export default function App() {
                         <div className="text-slate-400">Appuyez sur <span className="text-white font-bold">Ctrl+/</span> pour afficher tous les raccourcis (Ctrl+K, Ctrl+N, Ctrl+S...).</div>
                       </div>
                     </div>
+
+                    {/* Theme Toggle Button (ANN UIX Smooth Switcher) */}
+                    <ThemeToggleBtn 
+                      theme={theme} 
+                      onToggle={handleToggleTheme} 
+                      size="sm" 
+                    />
                   </div>
                 </header>
 
@@ -3262,33 +3316,101 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Theme Settings Card */}
-              <div className="p-6 rounded-lg glass-panel space-y-4">
-                <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">Thème de l'interface</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed font-mono">
-                  Basculez entre le mode sombre cyber-gothique d'origine et le mode clair pour s'adapter à votre environnement de travail.
-                </p>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setTheme('dark')}
-                    className={`px-4 py-2 border rounded text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              {/* Theme Settings Card (ANN UIX Enhanced) */}
+              <div className="p-6 rounded-lg glass-panel space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <Palette size={16} className="text-[#ff0040]" /> Thème & Ambiance Visuelle
+                    </h3>
+                    <p className="text-[11px] text-slate-400 leading-relaxed font-mono mt-1">
+                      Basculez entre le mode sombre cyber-gothique d'origine et le mode clair ANN UIX avec transition fluide et animation d'onde lumineuse.
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider font-semibold border ${
+                    theme === 'dark' 
+                      ? 'bg-[#180414] border-red-500/30 text-[#ff0040]' 
+                      : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                  }`}>
+                    {theme === 'dark' ? 'Sombre Actif' : 'Clair Actif'}
+                  </span>
+                </div>
+
+                {/* Side-by-Side Interactive Theme Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  {/* Dark Theme Card */}
+                  <div
+                    onClick={(e) => handleToggleTheme('dark', e)}
+                    className={`relative p-4 rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden ${
                       theme === 'dark'
-                        ? 'border-[#ff0040] text-[#ff0040] bg-[#ff0040]/5 shadow-[0_0_12px_rgba(255,0,64,0.2)]'
-                        : 'border-slate-800 text-slate-400 hover:border-slate-700'
+                        ? 'bg-[#0d0417] border-[#ff0040] shadow-[0_0_20px_rgba(255,0,64,0.25)] ring-1 ring-[#ff0040]'
+                        : 'bg-[#07020d] border-slate-800/80 hover:border-slate-700 opacity-75 hover:opacity-100'
                     }`}
                   >
-                    Sombre (Cyber-Gothique)
-                  </button>
-                  <button
-                    onClick={() => setTheme('light')}
-                    className={`px-4 py-2 border rounded text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Moon size={15} className="text-indigo-400" />
+                        <span className="text-xs font-bold font-display uppercase tracking-wider text-slate-100">
+                          Cyber-Gothique
+                        </span>
+                      </div>
+                      {theme === 'dark' && (
+                        <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                          <Check size={10} /> ACTIF
+                        </span>
+                      )}
+                    </div>
+                    {/* Visual Mini Mockup */}
+                    <div className="p-2.5 rounded-lg bg-[#05020a] border border-white/5 space-y-1.5 font-mono text-[9px] text-slate-400 select-none">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                        <span className="text-[#ff0040] font-bold">『欲』 YOKUBO</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      </div>
+                      <div className="bg-[#12041c] p-1.5 rounded text-[8px] text-slate-300 border border-red-500/20">
+                        Ambiance nocturne néon & haute réflexion
+                      </div>
+                    </div>
+                    <div className="mt-3 text-[10px] text-slate-400 font-mono">
+                      Fond obsidienne intense, accents cramoisis et cyan, contraste élevé.
+                    </div>
+                  </div>
+
+                  {/* Light Theme Card */}
+                  <div
+                    onClick={(e) => handleToggleTheme('light', e)}
+                    className={`relative p-4 rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden ${
                       theme === 'light'
-                        ? 'border-[#ff0040] text-[#ff0040] bg-[#ff0040]/5 shadow-[0_0_12px_rgba(255,0,64,0.2)]'
-                        : 'border-slate-800 text-slate-400 hover:border-slate-700'
+                        ? 'bg-white border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.25)] ring-1 ring-indigo-500 text-slate-900'
+                        : 'bg-white/5 border-slate-800/80 hover:border-slate-700 opacity-75 hover:opacity-100'
                     }`}
                   >
-                    Clair
-                  </button>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sun size={15} className="text-amber-500" />
+                        <span className={`text-xs font-bold font-display uppercase tracking-wider ${theme === 'light' ? 'text-slate-900' : 'text-slate-100'}`}>
+                          ANN UIX Clair
+                        </span>
+                      </div>
+                      {theme === 'light' && (
+                        <span className="flex items-center gap-1 text-[9px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                          <Check size={10} /> ACTIF
+                        </span>
+                      )}
+                    </div>
+                    {/* Visual Mini Mockup */}
+                    <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-200 space-y-1.5 font-mono text-[9px] text-slate-600 select-none">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-1">
+                        <span className="text-indigo-600 font-bold">『欲』 YOKUBO</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      </div>
+                      <div className="bg-white p-1.5 rounded text-[8px] text-slate-800 border border-slate-200 shadow-xs">
+                        Surface épurée, lecture confortable et verre satiné
+                      </div>
+                    </div>
+                    <div className={`mt-3 text-[10px] font-mono ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                      Toile ivoire satinée, typographie ultra-nette, bordures douces.
+                    </div>
+                  </div>
                 </div>
               </div>
 
